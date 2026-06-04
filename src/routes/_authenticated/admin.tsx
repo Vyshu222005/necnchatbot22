@@ -63,7 +63,7 @@ function useTable<T extends { id: string }>(table: string) {
   const [loading, setLoading] = useState(true);
   const reload = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
+    const { data, error } = await (supabase.from(table as any) as any).select("*").order("created_at", { ascending: false });
     if (error) toast.error(error.message); else setRows((data as T[]) ?? []);
     setLoading(false);
   };
