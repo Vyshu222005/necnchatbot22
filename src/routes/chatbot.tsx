@@ -5,7 +5,8 @@ import { Send, Mic, MicOff, Volume2, VolumeX, Bot, User, Sparkles } from "lucide
 import { Button } from "@/components/ui/button";
 import { askChatbot } from "@/lib/chat.functions";
 import { toast } from "sonner";
-import logo from "@/assets/necn-logo.png";
+import logoAsset from "@/assets/necn-logo.jpeg.asset.json";
+const logo = logoAsset.url;
 
 export const Route = createFileRoute("/chatbot")({
   head: () => ({
