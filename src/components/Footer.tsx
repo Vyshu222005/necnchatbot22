@@ -23,7 +23,7 @@ export function Footer() {
         </div>
         <div>
           <div className="font-semibold mb-3 text-sm">Contact</div>
-          <p className="text-sm text-muted-foreground">NECN College, Main Road<br />Hyderabad, Telangana - 500001<br />admissions@necn.edu.in</p>
+          <p className="text-sm text-muted-foreground">Narayana Engineering College<br />Muthukur Road, Nellore<br />Andhra Pradesh - 524003<br />admissions@necn.edu.in</p>
         </div>
       </div>
       <div className="border-t border-border py-4 text-center text-xs text-muted-foreground">
