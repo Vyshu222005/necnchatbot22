@@ -1,0 +1,1 @@
+UPDATE public.contact_info SET value = 'Narayana Engineering College, Muthukur Road, Nellore, Andhra Pradesh - 524003' WHERE type = 'address';
