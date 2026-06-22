@@ -1,44 +1,49 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Upload, FileText, Pencil, X } from "lucide-react";
+import { Plus, Trash2, Upload, FileText, Pencil, X, Shield, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import {
+  adminVerify,
+  adminMutate,
+  adminUploadDocument,
+  adminDeleteDocument,
+} from "@/lib/admin.functions";
 
-export const Route = createFileRoute("/_authenticated/admin")({
+export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard — NECN" }] }),
-  component: Admin,
+  component: AdminPage,
 });
 
-function Admin() {
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+const PASSWORD_KEY = "necn_admin_pw";
+
+function AdminPage() {
+  const [password, setPassword] = useState<string | null>(null);
+
   useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) { setIsAdmin(false); return; }
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-      setIsAdmin(!!data);
-    })();
+    if (typeof window === "undefined") return;
+    const stored = sessionStorage.getItem(PASSWORD_KEY);
+    if (stored) setPassword(stored);
   }, []);
 
-  if (isAdmin === null) return <div className="max-w-7xl mx-auto p-8 text-muted-foreground">Loading...</div>;
-  if (!isAdmin) return (
-    <div className="max-w-md mx-auto p-8 text-center">
-      <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-      <p className="text-muted-foreground text-sm mb-4">You need admin privileges to view this page.</p>
-      <Link to="/"><Button variant="outline">Go home</Button></Link>
-    </div>
-  );
+  if (!password) return <Login onLogin={(pw) => { sessionStorage.setItem(PASSWORD_KEY, pw); setPassword(pw); }} />;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Manage chatbot knowledge base.</p>
+      <div className="mb-6 flex justify-between items-start gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          <p className="text-muted-foreground text-sm">Changes here update the website instantly.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem(PASSWORD_KEY); setPassword(null); }}>
+          <LogOut className="w-4 h-4 mr-1.5" />Logout
+        </Button>
       </div>
       <Tabs defaultValue="faqs">
         <TabsList className="flex flex-wrap h-auto">
@@ -48,52 +53,108 @@ function Admin() {
           <TabsTrigger value="contact">Contact</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
-        <TabsContent value="faqs"><FaqsPanel /></TabsContent>
-        <TabsContent value="courses"><CoursesPanel /></TabsContent>
-        <TabsContent value="hostel"><HostelPanel /></TabsContent>
-        <TabsContent value="contact"><ContactPanel /></TabsContent>
-        <TabsContent value="documents"><DocumentsPanel /></TabsContent>
+        <TabsContent value="faqs"><FaqsPanel password={password} /></TabsContent>
+        <TabsContent value="courses"><CoursesPanel password={password} /></TabsContent>
+        <TabsContent value="hostel"><HostelPanel password={password} /></TabsContent>
+        <TabsContent value="contact"><ContactPanel password={password} /></TabsContent>
+        <TabsContent value="documents"><DocumentsPanel password={password} /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function Login({ onLogin }: { onLogin: (pw: string) => void }) {
+  const verify = useServerFn(adminVerify);
+  const [pw, setPw] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pw) return;
+    setLoading(true);
+    try {
+      await verify({ data: { password: pw } });
+      onLogin(pw);
+      toast.success("Welcome back");
+    } catch {
+      toast.error("Invalid password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center px-4">
+      <form onSubmit={submit} className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-soft">
+        <div className="flex justify-center mb-5">
+          <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
+            <Shield className="w-7 h-7 text-primary-foreground" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold text-center mb-1">Admin Login</h1>
+        <p className="text-muted-foreground text-sm text-center mb-6">Enter password to access dashboard</p>
+        <Label htmlFor="pw">Password</Label>
+        <Input
+          id="pw"
+          type="password"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="Enter admin password"
+          className="mt-1.5 mb-4"
+          autoFocus
+        />
+        <Button type="submit" disabled={loading} className="w-full bg-foreground text-background hover:bg-foreground/90">
+          {loading ? "Checking..." : "Login"}
+        </Button>
+        <p className="text-xs text-muted-foreground text-center mt-4">Demo password: admin123</p>
+      </form>
     </div>
   );
 }
 
 function useTable<T extends { id: string }>(table: string) {
   const [rows, setRows] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
   const reload = async () => {
-    setLoading(true);
     const { data, error } = await (supabase.from(table as any) as any).select("*").order("created_at", { ascending: false });
     if (error) toast.error(error.message); else setRows((data as T[]) ?? []);
-    setLoading(false);
   };
   useEffect(() => { reload(); }, []); // eslint-disable-line
-  return { rows, loading, reload };
+  return { rows, reload };
 }
 
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="bg-card border border-border rounded-xl p-5">{children}</div>;
 }
 
-function FaqsPanel() {
+function useMutate(password: string, tableName: any, reload: () => void) {
+  const mutate = useServerFn(adminMutate);
+  return async (op: "insert" | "update" | "delete", payload?: any, id?: string) => {
+    try {
+      await mutate({ data: { password, table: tableName, op, payload, id } });
+      toast.success("Saved");
+      reload();
+      return true;
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+      return false;
+    }
+  };
+}
+
+function FaqsPanel({ password }: { password: string }) {
   const { rows, reload } = useTable<any>("faqs");
+  const run = useMutate(password, "faqs", reload);
   const empty = { category: "", question_en: "", answer_en: "", question_te: "", answer_te: "" };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
 
   const save = async () => {
-    if (!form.category || !form.question_en || !form.answer_en) { toast.error("Category, question and answer (EN) are required"); return; }
-    const op = editId
-      ? supabase.from("faqs").update(form).eq("id", editId)
-      : supabase.from("faqs").insert(form);
-    const { error } = await op;
-    if (error) toast.error(error.message); else { toast.success("Saved"); setForm(empty); setEditId(null); reload(); }
+    if (!form.category || !form.question_en || !form.answer_en) { toast.error("Category, question & answer (EN) required"); return; }
+    const { id, created_at, updated_at, ...payload } = form;
+    const ok = await run(editId ? "update" : "insert", payload, editId ?? undefined);
+    if (ok) { setForm(empty); setEditId(null); }
   };
-  const del = async (id: string) => {
-    if (!confirm("Delete this FAQ?")) return;
-    const { error } = await supabase.from("faqs").delete().eq("id", id);
-    if (error) toast.error(error.message); else { toast.success("Deleted"); reload(); }
-  };
+  const del = async (id: string) => { if (confirm("Delete this FAQ?")) await run("delete", undefined, id); };
 
   return (
     <div className="grid md:grid-cols-2 gap-5 mt-5">
@@ -132,23 +193,21 @@ function FaqsPanel() {
   );
 }
 
-function CoursesPanel() {
+function CoursesPanel({ password }: { password: string }) {
   const { rows, reload } = useTable<any>("courses");
+  const run = useMutate(password, "courses", reload);
   const empty = { name: "", code: "", duration: "", eligibility: "", fees: "", description: "", seats: 0 };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
   const save = async () => {
     if (!form.name) { toast.error("Name required"); return; }
-    const payload = { ...form, seats: Number(form.seats) || null };
-    const op = editId ? supabase.from("courses").update(payload).eq("id", editId) : supabase.from("courses").insert(payload);
-    const { error } = await op;
-    if (error) toast.error(error.message); else { toast.success("Saved"); setForm(empty); setEditId(null); reload(); }
+    const { id, created_at, updated_at, ...rest } = form;
+    const payload = { ...rest, seats: Number(rest.seats) || null };
+    const ok = await run(editId ? "update" : "insert", payload, editId ?? undefined);
+    if (ok) { setForm(empty); setEditId(null); }
   };
-  const del = async (id: string) => {
-    if (!confirm("Delete this course?")) return;
-    const { error } = await supabase.from("courses").delete().eq("id", id);
-    if (error) toast.error(error.message); else { toast.success("Deleted"); reload(); }
-  };
+  const del = async (id: string) => { if (confirm("Delete this course?")) await run("delete", undefined, id); };
+
   return (
     <div className="grid md:grid-cols-2 gap-5 mt-5">
       <Card>
@@ -184,22 +243,19 @@ function CoursesPanel() {
   );
 }
 
-function HostelPanel() {
+function HostelPanel({ password }: { password: string }) {
   const { rows, reload } = useTable<any>("hostel_info");
+  const run = useMutate(password, "hostel_info", reload);
   const empty = { title: "", description: "", fees: "", facilities: "" };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
   const save = async () => {
-    if (!form.title || !form.description) { toast.error("Title and description required"); return; }
-    const op = editId ? supabase.from("hostel_info").update(form).eq("id", editId) : supabase.from("hostel_info").insert(form);
-    const { error } = await op;
-    if (error) toast.error(error.message); else { toast.success("Saved"); setForm(empty); setEditId(null); reload(); }
+    if (!form.title || !form.description) { toast.error("Title & description required"); return; }
+    const { id, created_at, updated_at, ...payload } = form;
+    const ok = await run(editId ? "update" : "insert", payload, editId ?? undefined);
+    if (ok) { setForm(empty); setEditId(null); }
   };
-  const del = async (id: string) => {
-    if (!confirm("Delete?")) return;
-    const { error } = await supabase.from("hostel_info").delete().eq("id", id);
-    if (error) toast.error(error.message); else reload();
-  };
+  const del = async (id: string) => { if (confirm("Delete?")) await run("delete", undefined, id); };
   return (
     <div className="grid md:grid-cols-2 gap-5 mt-5">
       <Card>
@@ -232,22 +288,19 @@ function HostelPanel() {
   );
 }
 
-function ContactPanel() {
+function ContactPanel({ password }: { password: string }) {
   const { rows, reload } = useTable<any>("contact_info");
+  const run = useMutate(password, "contact_info", reload);
   const empty = { label: "", value: "", type: "phone" };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
   const save = async () => {
-    if (!form.label || !form.value) { toast.error("Label and value required"); return; }
-    const op = editId ? supabase.from("contact_info").update(form).eq("id", editId) : supabase.from("contact_info").insert(form);
-    const { error } = await op;
-    if (error) toast.error(error.message); else { toast.success("Saved"); setForm(empty); setEditId(null); reload(); }
+    if (!form.label || !form.value) { toast.error("Label & value required"); return; }
+    const { id, created_at, updated_at, ...payload } = form;
+    const ok = await run(editId ? "update" : "insert", payload, editId ?? undefined);
+    if (ok) { setForm(empty); setEditId(null); }
   };
-  const del = async (id: string) => {
-    if (!confirm("Delete?")) return;
-    const { error } = await supabase.from("contact_info").delete().eq("id", id);
-    if (error) toast.error(error.message); else reload();
-  };
+  const del = async (id: string) => { if (confirm("Delete?")) await run("delete", undefined, id); };
   return (
     <div className="grid md:grid-cols-2 gap-5 mt-5">
       <Card>
@@ -284,8 +337,10 @@ function ContactPanel() {
   );
 }
 
-function DocumentsPanel() {
+function DocumentsPanel({ password }: { password: string }) {
   const { rows, reload } = useTable<any>("documents");
+  const uploadFn = useServerFn(adminUploadDocument);
+  const deleteFn = useServerFn(adminDeleteDocument);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("brochure");
   const [description, setDescription] = useState("");
@@ -296,15 +351,14 @@ function DocumentsPanel() {
     if (!file || !title) { toast.error("File and title required"); return; }
     setUploading(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      const path = `${category}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
-      if (upErr) throw upErr;
-      const { data: signed } = await supabase.storage.from("documents").createSignedUrl(path, 60 * 60 * 24 * 365);
-      const { error } = await supabase.from("documents").insert({
-        title, category, description, file_path: path, file_url: signed?.signedUrl ?? null, uploaded_by: u.user?.id,
-      });
-      if (error) throw error;
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+      const fileBase64 = btoa(binary);
+      await uploadFn({ data: {
+        password, title, category, description,
+        filename: file.name, fileBase64, contentType: file.type || "application/pdf",
+      }});
       toast.success("Uploaded");
       setTitle(""); setDescription(""); setFile(null);
       reload();
@@ -313,9 +367,8 @@ function DocumentsPanel() {
   };
   const del = async (r: any) => {
     if (!confirm("Delete document?")) return;
-    await supabase.storage.from("documents").remove([r.file_path]);
-    await supabase.from("documents").delete().eq("id", r.id);
-    reload();
+    try { await deleteFn({ data: { password, id: r.id, path: r.file_path } }); toast.success("Deleted"); reload(); }
+    catch (e: any) { toast.error(e?.message ?? "Delete failed"); }
   };
 
   return (
