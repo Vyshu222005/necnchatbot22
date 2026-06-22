@@ -93,4 +93,3 @@ function Index() {
     </div>
   );
 }
-// regen

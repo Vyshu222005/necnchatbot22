@@ -407,4 +407,3 @@ function DocumentsPanel({ password }: { password: string }) {
     </div>
   );
 }
-
