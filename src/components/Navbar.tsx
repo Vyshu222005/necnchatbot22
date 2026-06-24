@@ -57,13 +57,12 @@ export function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-2">
-          {session ? (
+          {session && (
             <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
               <LogOut className="w-4 h-4 mr-1.5" /> Sign out
             </Button>
-          ) : (
-            <Link to="/auth"><Button size="sm" variant="outline">Admin Login</Button></Link>
           )}
+          <Link to="/admin"><Button size="sm" variant="outline">Admin Login</Button></Link>
           <Link to="/chatbot"><Button size="sm" className="bg-gradient-primary text-primary-foreground shadow-soft">Ask AI</Button></Link>
         </div>
 
@@ -82,9 +81,8 @@ export function Navbar() {
             {isAdmin && <Link to="/admin" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-accent">Admin</Link>}
             {session ? (
               <button onClick={() => { supabase.auth.signOut(); setOpen(false); }} className="px-3 py-2.5 text-left rounded-md text-sm font-medium hover:bg-accent">Sign out</button>
-            ) : (
-              <Link to="/auth" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-accent">Admin Login</Link>
-            )}
+            ) : null}
+            <Link to="/admin" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-accent">Admin Login</Link>
           </div>
         </div>
       )}
