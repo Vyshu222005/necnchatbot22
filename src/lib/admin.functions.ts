@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const ALLOWED_TABLES = ["faqs", "courses", "hostel_info", "contact_info", "documents"] as const;
 type AllowedTable = (typeof ALLOWED_TABLES)[number];
@@ -11,37 +10,32 @@ const ALLOWED_UPLOAD_TYPES = new Set([
   "image/webp",
 ]);
 
-// 1 hour signed URL TTL — short-lived, refresh on demand from the admin UI.
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
-async function assertAdmin(context: { supabase: any; userId: string }) {
-  const { data, error } = await context.supabase.rpc("has_role", {
-    _user_id: context.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin role required");
+function assertPassword(password: string) {
+  const expected = process.env.ADMIN_PASSWORD || "admin123";
+  if (password !== expected) throw new Error("Invalid admin password");
 }
 
 export const adminVerify = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context);
+  .inputValidator((d: { password: string }) => d)
+  .handler(async ({ data }) => {
+    assertPassword(data.password);
     return { ok: true };
   });
 
 export const adminMutate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(
     (d: {
+      password: string;
       table: AllowedTable;
       op: "insert" | "update" | "delete";
       payload?: Record<string, any>;
       id?: string;
     }) => d
   )
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+  .handler(async ({ data }) => {
+    assertPassword(data.password);
     if (!ALLOWED_TABLES.includes(data.table)) throw new Error("Invalid table");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const tbl = supabaseAdmin.from(data.table as any);
@@ -66,9 +60,9 @@ export const adminMutate = createServerFn({ method: "POST" })
   });
 
 export const adminUploadDocument = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(
     (d: {
+      password: string;
       title: string;
       category: string;
       description?: string;
@@ -77,13 +71,11 @@ export const adminUploadDocument = createServerFn({ method: "POST" })
       contentType?: string;
     }) => d
   )
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+  .handler(async ({ data }) => {
+    assertPassword(data.password);
     const contentType = (data.contentType || "application/pdf").toLowerCase();
     if (!ALLOWED_UPLOAD_TYPES.has(contentType)) {
-      throw new Error(
-        `Unsupported file type: ${contentType}. Allowed: ${[...ALLOWED_UPLOAD_TYPES].join(", ")}`
-      );
+      throw new Error(`Unsupported file type: ${contentType}`);
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const safeName = data.filename.replace(/[^a-zA-Z0-9.\-_]/g, "_");
@@ -112,10 +104,9 @@ export const adminUploadDocument = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteDocument = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; path: string }) => d)
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+  .inputValidator((d: { password: string; id: string; path: string }) => d)
+  .handler(async ({ data }) => {
+    assertPassword(data.password);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (data.path) await supabaseAdmin.storage.from("documents").remove([data.path]);
     const { error } = await supabaseAdmin.from("documents").delete().eq("id", data.id);
