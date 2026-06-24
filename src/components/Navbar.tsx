@@ -81,9 +81,8 @@ export function Navbar() {
             {isAdmin && <Link to="/admin" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-accent">Admin</Link>}
             {session ? (
               <button onClick={() => { supabase.auth.signOut(); setOpen(false); }} className="px-3 py-2.5 text-left rounded-md text-sm font-medium hover:bg-accent">Sign out</button>
-            ) : (
-              <Link to="/auth" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-accent">Admin Login</Link>
-            )}
+            ) : null}
+            <Link to="/admin" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-accent">Admin Login</Link>
           </div>
         </div>
       )}
