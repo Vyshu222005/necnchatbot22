@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Upload, FileText, Pencil, X, Shield, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
-  adminVerify,
   adminMutate,
   adminUploadDocument,
   adminDeleteDocument,
@@ -21,18 +20,64 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-const PASSWORD_KEY = "necn_admin_pw";
+type AuthStatus = "loading" | "signed-out" | "not-admin" | "admin";
 
 function AdminPage() {
-  const [password, setPassword] = useState<string | null>(null);
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = sessionStorage.getItem(PASSWORD_KEY);
-    if (stored) setPassword(stored);
+    let cancelled = false;
+    const check = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        if (!cancelled) setStatus("signed-out");
+        return;
+      }
+      const { data: roleRow } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", sessionData.session.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (cancelled) return;
+      setStatus(roleRow ? "admin" : "not-admin");
+    };
+    check();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => check());
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  if (!password) return <Login onLogin={(pw) => { sessionStorage.setItem(PASSWORD_KEY, pw); setPassword(pw); }} />;
+  if (status === "loading") {
+    return <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground text-sm">Checking access…</div>;
+  }
+
+  if (status === "signed-out") {
+    return (
+      <Gate
+        title="Admin Login Required"
+        description="Sign in with your admin account to manage the website."
+        action={<Link to="/auth"><Button className="bg-foreground text-background hover:bg-foreground/90">Go to sign in</Button></Link>}
+      />
+    );
+  }
+
+  if (status === "not-admin") {
+    return (
+      <Gate
+        title="Access Denied"
+        description="Your account does not have admin permissions. Contact a site administrator if you believe this is wrong."
+        action={
+          <Button variant="outline" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/auth" }); }}>
+            <LogOut className="w-4 h-4 mr-1.5" />Sign out
+          </Button>
+        }
+      />
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -41,8 +86,8 @@ function AdminPage() {
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           <p className="text-muted-foreground text-sm">Changes here update the website instantly.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem(PASSWORD_KEY); setPassword(null); }}>
-          <LogOut className="w-4 h-4 mr-1.5" />Logout
+        <Button variant="outline" size="sm" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/auth" }); }}>
+          <LogOut className="w-4 h-4 mr-1.5" />Sign out
         </Button>
       </div>
       <Tabs defaultValue="faqs">
@@ -53,61 +98,29 @@ function AdminPage() {
           <TabsTrigger value="contact">Contact</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
-        <TabsContent value="faqs"><FaqsPanel password={password} /></TabsContent>
-        <TabsContent value="courses"><CoursesPanel password={password} /></TabsContent>
-        <TabsContent value="hostel"><HostelPanel password={password} /></TabsContent>
-        <TabsContent value="contact"><ContactPanel password={password} /></TabsContent>
-        <TabsContent value="documents"><DocumentsPanel password={password} /></TabsContent>
+        <TabsContent value="faqs"><FaqsPanel /></TabsContent>
+        <TabsContent value="courses"><CoursesPanel /></TabsContent>
+        <TabsContent value="hostel"><HostelPanel /></TabsContent>
+        <TabsContent value="contact"><ContactPanel /></TabsContent>
+        <TabsContent value="documents"><DocumentsPanel /></TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function Login({ onLogin }: { onLogin: (pw: string) => void }) {
-  const verify = useServerFn(adminVerify);
-  const [pw, setPw] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pw) return;
-    setLoading(true);
-    try {
-      await verify({ data: { password: pw } });
-      onLogin(pw);
-      toast.success("Welcome back");
-    } catch {
-      toast.error("Invalid password");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+function Gate({ title, description, action }: { title: string; description: string; action: React.ReactNode }) {
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
-      <form onSubmit={submit} className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-soft">
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-soft text-center">
         <div className="flex justify-center mb-5">
           <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
             <Shield className="w-7 h-7 text-primary-foreground" />
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-center mb-1">Admin Login</h1>
-        <p className="text-muted-foreground text-sm text-center mb-6">Enter password to access dashboard</p>
-        <Label htmlFor="pw">Password</Label>
-        <Input
-          id="pw"
-          type="password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          placeholder="Enter admin password"
-          className="mt-1.5 mb-4"
-          autoFocus
-        />
-        <Button type="submit" disabled={loading} className="w-full bg-foreground text-background hover:bg-foreground/90">
-          {loading ? "Checking..." : "Login"}
-        </Button>
-        <p className="text-xs text-muted-foreground text-center mt-4">Demo password: admin123</p>
-      </form>
+        <h1 className="text-2xl font-bold mb-2">{title}</h1>
+        <p className="text-muted-foreground text-sm mb-6">{description}</p>
+        {action}
+      </div>
     </div>
   );
 }
@@ -126,11 +139,11 @@ function Card({ children }: { children: React.ReactNode }) {
   return <div className="bg-card border border-border rounded-xl p-5">{children}</div>;
 }
 
-function useMutate(password: string, tableName: any, reload: () => void) {
+function useMutate(tableName: any, reload: () => void) {
   const mutate = useServerFn(adminMutate);
   return async (op: "insert" | "update" | "delete", payload?: any, id?: string) => {
     try {
-      await mutate({ data: { password, table: tableName, op, payload, id } });
+      await mutate({ data: { table: tableName, op, payload, id } });
       toast.success("Saved");
       reload();
       return true;
@@ -141,9 +154,9 @@ function useMutate(password: string, tableName: any, reload: () => void) {
   };
 }
 
-function FaqsPanel({ password }: { password: string }) {
+function FaqsPanel() {
   const { rows, reload } = useTable<any>("faqs");
-  const run = useMutate(password, "faqs", reload);
+  const run = useMutate("faqs", reload);
   const empty = { category: "", question_en: "", answer_en: "", question_te: "", answer_te: "" };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
@@ -193,9 +206,9 @@ function FaqsPanel({ password }: { password: string }) {
   );
 }
 
-function CoursesPanel({ password }: { password: string }) {
+function CoursesPanel() {
   const { rows, reload } = useTable<any>("courses");
-  const run = useMutate(password, "courses", reload);
+  const run = useMutate("courses", reload);
   const empty = { name: "", code: "", duration: "", eligibility: "", fees: "", description: "", seats: 0 };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
@@ -243,9 +256,9 @@ function CoursesPanel({ password }: { password: string }) {
   );
 }
 
-function HostelPanel({ password }: { password: string }) {
+function HostelPanel() {
   const { rows, reload } = useTable<any>("hostel_info");
-  const run = useMutate(password, "hostel_info", reload);
+  const run = useMutate("hostel_info", reload);
   const empty = { title: "", description: "", fees: "", facilities: "" };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
@@ -288,9 +301,9 @@ function HostelPanel({ password }: { password: string }) {
   );
 }
 
-function ContactPanel({ password }: { password: string }) {
+function ContactPanel() {
   const { rows, reload } = useTable<any>("contact_info");
-  const run = useMutate(password, "contact_info", reload);
+  const run = useMutate("contact_info", reload);
   const empty = { label: "", value: "", type: "phone" };
   const [form, setForm] = useState<any>(empty);
   const [editId, setEditId] = useState<string | null>(null);
@@ -337,7 +350,7 @@ function ContactPanel({ password }: { password: string }) {
   );
 }
 
-function DocumentsPanel({ password }: { password: string }) {
+function DocumentsPanel() {
   const { rows, reload } = useTable<any>("documents");
   const uploadFn = useServerFn(adminUploadDocument);
   const deleteFn = useServerFn(adminDeleteDocument);
@@ -356,7 +369,7 @@ function DocumentsPanel({ password }: { password: string }) {
       for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
       const fileBase64 = btoa(binary);
       await uploadFn({ data: {
-        password, title, category, description,
+        title, category, description,
         filename: file.name, fileBase64, contentType: file.type || "application/pdf",
       }});
       toast.success("Uploaded");
@@ -367,7 +380,7 @@ function DocumentsPanel({ password }: { password: string }) {
   };
   const del = async (r: any) => {
     if (!confirm("Delete document?")) return;
-    try { await deleteFn({ data: { password, id: r.id, path: r.file_path } }); toast.success("Deleted"); reload(); }
+    try { await deleteFn({ data: { id: r.id, path: r.file_path } }); toast.success("Deleted"); reload(); }
     catch (e: any) { toast.error(e?.message ?? "Delete failed"); }
   };
 
@@ -384,7 +397,7 @@ function DocumentsPanel({ password }: { password: string }) {
             </select>
           </div>
           <div><Label>Description (optional)</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} /></div>
-          <div><Label>File (PDF)</Label><Input type="file" accept=".pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
+          <div><Label>File (PDF or image)</Label><Input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
           <Button onClick={upload} disabled={uploading} className="bg-gradient-primary text-primary-foreground">
             {uploading ? "Uploading..." : "Upload"}
           </Button>
