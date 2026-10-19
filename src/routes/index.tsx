@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { MessageCircle, BookOpen, Users, Award, Building2, Bus, Sparkles, ArrowRight } from "lucide-react";
-import logoAsset from "@/assets/necn-logo.jpeg.asset.json";
-const logo = logoAsset.url;
+import logo from "@/assets/necn-logo.jpeg";
 import hero from "@/assets/campus-hero.jpg";
 import { Button } from "@/components/ui/button";
 

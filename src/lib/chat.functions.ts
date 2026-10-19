@@ -16,7 +16,7 @@ const InputSchema = z.object({
 export const askChatbot = createServerFn({ method: "POST" })
   .inputValidator((d) => InputSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("AI service not configured");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -61,10 +61,10 @@ ${kb}`;
       ...data.messages.map((m) => ({ role: m.role, content: m.content })),
     ];
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages }),
+      body: JSON.stringify({ model: "gemini-2.5-flash", messages }),
     });
 
     if (!res.ok) {

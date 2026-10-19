@@ -1,8 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Menu, X, LogOut } from "lucide-react";
-import logoAsset from "@/assets/necn-logo.jpeg.asset.json";
-const logo = logoAsset.url;
+import logo from "@/assets/necn-logo.jpeg";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";

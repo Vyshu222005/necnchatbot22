@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import logoAsset from "@/assets/necn-logo.jpeg.asset.json";
-const logo = logoAsset.url;
+import logo from "@/assets/necn-logo.jpeg";
 
 export function Footer() {
   return (

@@ -5,8 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import logoAsset from "@/assets/necn-logo.jpeg.asset.json";
-const logo = logoAsset.url;
+import logo from "@/assets/necn-logo.jpeg";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Admin Login — NECN" }, { name: "description", content: "Admin login for NECN College dashboard." }] }),
